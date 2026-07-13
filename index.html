@@ -866,12 +866,7 @@ const SITE_CONFIG = {
     routeUrl: 'https://disk.yandex.ru/d/TltdgOgIte_lfQ'
   },
   rsvp: {
-    telegram: { botToken: '8835182683:AAECUACQ8k6Ys44WkIsmSbJ0BqG51jlYC7w', chatId: '899076120' },
-    googleForm: {
-      formUrl: 'https://docs.google.com/forms/d/e/1FAIpQLSeDkOwZY5Xq6A_3AJNy9BCt8egwvnMXunKUEnKUXjuFpIgvNA/formResponse',
-      entries: { fname:'entry.986486961', lname:'entry.2049782994', attend:'entry.174304946',
-                 children:'entry.1386201675', comment:'entry.607161229' }
-    }
+    relayUrl: 'https://script.google.com/macros/s/AKfycbx15hUU_HWmrTXYtoiKW6N5GPkzkSZMXvDNcUW1jSZmgeoiDpvdkAilIBRb3z25TRHGOA/exec'
   }
 };
 /* ============================================= */
@@ -1077,101 +1072,31 @@ const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').match
 })();
 
 /* ================= ОТПРАВКА АНКЕТЫ ================= */
-function ruPlural(n, one, few, many){
-  const mod100 = Math.abs(n) % 100, mod10 = mod100 % 10;
-  if (mod100 > 10 && mod100 < 20) return many;
-  if (mod10 > 1 && mod10 < 5) return few;
-  if (mod10 === 1) return one;
-  return many;
-}
-
-function submitViaHiddenForm(url, fields){
-  return new Promise((resolve)=>{
-    let frame = document.getElementById('hiddenSubmitFrame');
-    if (!frame){
-      frame = document.createElement('iframe');
-      frame.id = 'hiddenSubmitFrame';
-      frame.name = 'hiddenSubmitFrame';
-      frame.style.display = 'none';
-      document.body.appendChild(frame);
-    }
-    const form = document.createElement('form');
-    form.action = url;
-    form.method = 'POST';
-    form.target = 'hiddenSubmitFrame';
-    Object.entries(fields).forEach(([name, value])=>{
-      const inp = document.createElement('input');
-      inp.type = 'hidden';
-      inp.name = name;
-      inp.value = value;
-      form.appendChild(inp);
-    });
-    document.body.appendChild(form);
-    form.submit();
-    setTimeout(()=>{ form.remove(); resolve(); }, 900);
-  });
-}
-
 async function sendRSVP(data){
-  const cfg = SITE_CONFIG.rsvp;
-  const willCome = data.attend === 'Да';
-  const childrenNum = parseInt(data.children, 10) || 0;
-  const totalPeople = 1 + childrenNum;
-
-  const text = willCome
-    ? '🤍 Гость придёт!\n' +
-      '─────────────\n' +
-      data.fname + ' ' + data.lname + '\n' +
-      '+1 ' + ruPlural(1,'взрослый','взрослых','взрослых') + '\n' +
-      '+' + childrenNum + ' ' + ruPlural(childrenNum,'ребёнок','ребёнка','детей') + '\n' +
-      'Комментарий: ' + (data.comment || '—') + '\n' +
-      '─────────────\n' +
-      'Итого по анкете: ' + totalPeople + ' ' + ruPlural(totalPeople,'человек','человека','человек') + '\n' +
-      new Date().toLocaleString('ru-RU', { dateStyle:'short', timeStyle:'short' })
-    : '💌 Не сможет прийти\n' +
-      '─────────────\n' +
-      data.fname + ' ' + data.lname + '\n' +
-      'Комментарий: ' + (data.comment || '—') + '\n' +
-      '─────────────\n' +
-      new Date().toLocaleString('ru-RU', { dateStyle:'short', timeStyle:'short' });
-
-  const tasks = [];
-  let configured = false;
-
-  if (cfg.telegram && cfg.telegram.botToken && cfg.telegram.chatId){
-    configured = true;
-    tasks.push((async ()=>{
-      const ctrl = new AbortController();
-      const t = setTimeout(()=> ctrl.abort(), 10000);
-      try{
-        await fetch('https://api.telegram.org/bot' + cfg.telegram.botToken + '/sendMessage', {
-          method: 'POST', mode: 'no-cors', signal: ctrl.signal,
-          body: new URLSearchParams({ chat_id: cfg.telegram.chatId, text })
-        });
-      } finally { clearTimeout(t); }
-    })());
-  }
-
-  if (cfg.googleForm && cfg.googleForm.formUrl){
-    configured = true;
-    const { formUrl, entries } = cfg.googleForm;
-    tasks.push(submitViaHiddenForm(formUrl, {
-      [entries.fname]: data.fname,
-      [entries.lname]: data.lname,
-      [entries.attend]: data.attend,
-      [entries.children]: data.children,
-      [entries.comment]: data.comment
-    }));
-  }
-
-  if (!configured){
-    console.log('RSVP (демо-режим, каналы не настроены):', data);
+  const relayUrl = SITE_CONFIG.rsvp.relayUrl;
+  if (!relayUrl){
+    console.log('RSVP (демо-режим, relayUrl не настроен):', data);
     return;
   }
 
-  const results = await Promise.allSettled(tasks);
-  const allFailed = results.every(r => r.status === 'rejected');
-  if (allFailed) throw new Error('Не удалось отправить ни по одному каналу');
+  const ctrl = new AbortController();
+  const t = setTimeout(()=> ctrl.abort(), 12000);
+  try{
+    await fetch(relayUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      signal: ctrl.signal,
+      body: new URLSearchParams({
+        fname: data.fname,
+        lname: data.lname,
+        attend: data.attend,
+        children: data.children,
+        comment: data.comment
+      })
+    });
+  } finally {
+    clearTimeout(t);
+  }
 }
 </script>
 </body>
